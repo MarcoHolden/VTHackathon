@@ -38,6 +38,8 @@ def move_mouse(screen_width, x, screen_height, y):
     
     pyautogui.moveTo(screen_x, screen_y)
 
+#check if text dictation is open
+isOpen = False
 while True:
     ret, frame = cam.read()
     if not ret:
@@ -77,24 +79,26 @@ while True:
         #rigt eyebrow movement
         if model.right_eyebrow(frame, landmarks, frame_w, frame_h):
             print("right eyebrow detected")
-            pyautogui.scroll(10)
-
+            pyautogui.click()
         #mouth open is action
-        if model.mouth_open(frame, landmarks, frame_w, frame_h):
+        if model.mouth_open(frame, landmarks, frame_w, frame_h, isOpen) == 0:
+            pyautogui.press('esc')
+        elif model.mouth_open(frame, landmarks, frame_w, frame_h, isOpen) == 1:
             print("mouth open")
-            pyautogui.press('ctrl')
-            pyautogui.press('ctrl')
+            #pyautogui.hotkey('ctrl','ctrl')
+            pyautogui.press('ctrl', presses=2)
+        else:
+            pass
 
         #right wink
         if model.right_wink(frame, landmarks, frame_w,frame_h):
-            
             print("right wink")
-            pyautogui.click(button='right')
+            pyautogui.click()
 
-        #left wink
         if model.left_wink(frame, landmarks, frame_w,frame_h):
             print("left wink")
             pyautogui.click()
+        
 
     cv2.imshow('Eye Controlled Mouse', frame)
     if cv2.waitKey(1) & 0xFF == ord('q'):
