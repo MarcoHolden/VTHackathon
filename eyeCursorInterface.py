@@ -1,126 +1,153 @@
-import cv2
-import mediapipe as mp
-import pyautogui
 import numpy as np
+import tkinter as tk
+import random
+import cv2
+import pyautogui
+import mediapipe as mp
+from threading import Thread
+from queue import Queue, Empty
 import model
-import calabration
+import time
 
-cam = cv2.VideoCapture(0)
-face_mesh = mp.solutions.face_mesh.FaceMesh(refine_landmarks=True)
-screen_w, screen_h = pyautogui.size()
 
-# Initialize smoothing variables
-alpha = 0.5  # Smoothing factor (between 0 and 1)
-prev_x, prev_y = 0.5, 0.5  # Initial previous positions (normalized)
+class CircleMenuApp:
+    def __init__(self):
+        self.root = tk.Tk()
+        self.menu = CircleMenu(self.root)
+        self.root.mainloop()
 
-# Variable to manage the timing of clicks
-last_click_time = 0
-click_interval = 0.5  # Minimum interval between clicks in seconds
+class CircleMenu:
+    def __init__(self, root):
+        self.root = root
+        self.root.title("Clickable Circles")
+        self.canvas = tk.Canvas(root, width=800, height=600, bg='black')
+        self.canvas.pack(fill=tk.BOTH, expand=True)
 
-def move_mouse(screen_width, x, screen_height, y):
-    global prev_x, prev_y
+        self.circles = []
+        self.start_time = time.time()  # Time when the first circle is created
+        self.create_circle()  # Create the first circle
+
+    def create_circle(self):
+        # Remove any existing circles
+        self.canvas.delete("circle")
+        self.circles.clear()
+        
+        # Generate new circle position and radius
+        x = random.randint(100, 700)
+        y = random.randint(100, 500)
+        radius = 20
+        circle = self.canvas.create_oval(x-radius, y-radius, x+radius, y+radius, fill='orange', outline='orange', tags="circle")
+        self.circles.append((circle, (x, y, radius)))
+        self.canvas.tag_bind(circle, '<Button-1>', self.on_circle_click)
+        self.start_time = time.time()  # Update start time
+
+    def on_circle_click(self, event):
+        item = self.canvas.find_closest(event.x, event.y)
+        click_time = time.time() - self.start_time  # Time since the circle appeared
+        print(f"Circle clicked! Time taken: {click_time:.2f} seconds")
+        self.create_circle()  # Create a new circle
+
+    def get_circle_data(self):
+        print(self.circles)
+        return self.circles
+
+
+class EyeTrackingThread(Thread):
+    def __init__(self, queue):
+        super().__init__()
+        self.queue = queue
+        self.daemon = True
+        self.cam = cv2.VideoCapture(0)
+        self.face_mesh = mp.solutions.face_mesh.FaceMesh(refine_landmarks=True)
+        self.screen_w, self.screen_h = pyautogui.size()
+        self.alpha = 0.5
+        self.prev_x, self.prev_y = 0.5, 0.5
+        self.isOpen = False
+        self.last_click_time = 0
+        self.click_interval = 0.5
+
+    def run(self):
+        while True:
+            ret, frame = self.cam.read()
+            if not ret:
+                print("Failed to grab frame")
+                break
+
+            frame = cv2.flip(frame, 1)
+            rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            output = self.face_mesh.process(rgb_frame)
+            landmark_points = output.multi_face_landmarks
+
+            frame_h, frame_w, _ = frame.shape
+            if landmark_points:
+                landmarks = landmark_points[0].landmark
+                right_iris_landmarks = [473, 474, 475, 476]
+                avg_x = sum(landmarks[idx].x for idx in right_iris_landmarks) / len(right_iris_landmarks)
+                avg_y = sum(landmarks[idx].y for idx in right_iris_landmarks) / len(right_iris_landmarks)
+                
+                self.move_mouse(self.screen_w, avg_x, self.screen_h, avg_y)
+
+                #left eyebrow movement
+                #model.left_eyebrow(frame,landmarks, frame_w, frame_h)
+                #right eyebrow movement
+                #model.right_eyebrow(frame, landmarks, frame_w, frame_h)
+                #mouth open is action
+                model.mouth_open(frame, landmarks, frame_w, frame_h, self.isOpen)
+                #right wink
+                model.right_wink(frame, landmarks, frame_w,frame_h)
+                # Detect left wink (blinking)
+                self.last_click_time = model.left_wink(frame, landmarks,frame_w,frame_h, self.click_interval, self.last_click_time)
+
+                
+                # Put cursor position in queue for main thread to process
+                cursor_x, cursor_y = pyautogui.position()
+                self.queue.put((cursor_x, cursor_y))
+
+            if cv2.waitKey(1) & 0xFF == ord('q'):
+                break
+
+        self.cam.release()
+        cv2.destroyAllWindows()
+
+    def move_mouse(self, screen_width, x, screen_height, y):
+        x = self.alpha * x + (1 - self.alpha) * self.prev_x
+        y = self.alpha * y + (1 - self.alpha) * self.prev_y
+
+        self.prev_x, self.prev_y = x, y
+
+        screen_x = x * screen_width
+        screen_y = y * screen_height
+        screen_x = (5 * (screen_x - screen_width / 2) + screen_width / 2)
+        screen_y = (5 * (screen_y - screen_height / 2) + screen_height / 2)
+
+        screen_x = np.clip(screen_x, 0, screen_width - 1)
+        screen_y = np.clip(screen_y, 0, screen_height - 1)
+
+        pyautogui.moveTo(screen_x, screen_y)
+
+def main():
+    queue = Queue()
     
-    # Smooth out the eye position using exponential moving average
-    x = alpha * x + (1 - alpha) * prev_x
-    y = alpha * y + (1 - alpha) * prev_y
-    
-    # Update previous positions
-    prev_x, prev_y = x, y
+    # Start the EyeTrackingThread
+    eye_tracking_thread = EyeTrackingThread(queue)
+    eye_tracking_thread.start()
 
-    # Convert normalized coordinates to screen coordinates
-    screen_x = x * screen_width
-    screen_y = y * screen_height
-    screen_x = (5 * (screen_x - screen_width / 2) + screen_width / 2)
-    screen_y = (5 * (screen_y - screen_height / 2) + screen_height / 2)
-    
-    # Apply boundary constraints
-    screen_x = np.clip(screen_x, 0, screen_width - 1)
-    screen_y = np.clip(screen_y, 0, screen_height - 1)
-    
-    pyautogui.moveTo(screen_x, screen_y)
+    # Run the Tkinter GUI in the main thread
+    tk_app = CircleMenuApp()
 
-#check if text dictation is open
-isOpen = False
-calabrated = False
-while True:
-    ret, frame = cam.read()
-    if not ret:
-        break
-
-    frame = cv2.flip(frame, 1)
-    #frame.flags.writeable = False
-    rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-    output = face_mesh.process(rgb_frame)
-    landmark_points = output.multi_face_landmarks
-
-    # Indices for the eye landmarks (including irises)
-    left_eye_landmarks = [33, 133, 144, 145, 153, 154, 155, 159, 160, 161, 163, 173]
-    right_eye_landmarks = [362, 382, 383, 384, 385, 386, 387, 388, 390, 398]
-    left_iris_landmarks = [468, 469, 470, 471]
-    right_iris_landmarks = [473, 474, 475, 476]
-    MOUTH_LANDMARKS = [61, 185, 40, 39, 37, 0, 267, 269, 270, 409, 291, 375, 321, 405, 314, 17, 84, 181, 91, 146, 61]
-    frame_h, frame_w, _ = frame.shape
-    if landmark_points:
-        landmarks = landmark_points[0].landmark
-
-        # Calculate average position of the iris
-        avg_x = sum(landmarks[idx].x for idx in right_iris_landmarks) / len(right_iris_landmarks)
-        avg_y = sum(landmarks[idx].y for idx in right_iris_landmarks) / len(right_iris_landmarks)
-        if not calabrated:
+    while True:
+        try:
+            circle = tk_app.menu.get_circle_data()
+            if is_circle_clicked(circle):
+                print(f"Cursor clicked a Circle!")
+        except Empty:
+            print("here")
             pass
-            
-        # Move the mouse cursor based on smoothed eye positions
-        move_mouse(screen_w, avg_x, screen_h, avg_y)
 
-        # Draw landmarks for the iris
-        for idx in right_iris_landmarks:
-            x = int(landmarks[idx].x * frame_w)
-            y = int(landmarks[idx].y * frame_h)
-            cv2.circle(frame, (x, y), 3, (0, 255, 0))
-    
-#        for idx in MOUTH_LANDMARKS:
-#            x = int(landmarks[idx].x * frame_w)
-#            y = int(landmarks[idx].y * frame_h)
-#            cv2.circle(frame, (x, y), 3, (0, 255, 0))
-#
-        model.eyebrows(frame, landmarks, frame_w, frame_h)
+def is_circle_clicked(circle):
+    if circle.clicked:
+            return True
+    return False
 
-        #left eyebrow movement
-        #model.left_eyebrow(frame,landmarks, frame_w, frame_h)
-        #right eyebrow movement
-        #model.right_eyebrow(frame, landmarks, frame_w, frame_h)
-        #mouth open is action
-        model.mouth_open(frame, landmarks, frame_w, frame_h, isOpen)
-        #right wink
-        model.right_wink(frame, landmarks, frame_w,frame_h)
-        # Detect left wink (blinking)
-        # model.left_wink(frame, landmarks,frame_w,frame_h)
-        # Detect Smile
-        model.smile(frame, landmarks,frame_w,frame_h)
-
-
-        left = [landmarks[145], landmarks[159]]
-        right = [landmarks[374], landmarks[386]]
-        for landmark in left:
-            x = int(landmark.x * frame_w)
-            y = int(landmark.y * frame_h)
-            cv2.circle(frame, (x, y), 3, (0, 255, 255))
-
-        current_time = cv2.getTickCount() / cv2.getTickFrequency()
-        if (abs(left[0].y - left[1].y) < 0.012) and (abs(right[0].y - right[1].y) > 0.015):
-            x = 0
-            if current_time - last_click_time >= click_interval:
-                print("wink")
-                pyautogui.click()
-                last_click_time = current_time  # Update last click time
-            else:
-                print("long wink")
-                pyautogui.mouseDown(button='left')
-            
-
-    cv2.imshow('Eye Controlled Mouse', frame)
-    if cv2.waitKey(1) & 0xFF == ord('q'):
-        break
-
-cam.release()
-cv2.destroyAllWindows()
+if __name__ == "__main__":
+    main()
