@@ -3,6 +3,7 @@ This file will contains all the method needed by the eyecursorinterface.py
 '''
 import cv2
 import pyautogui
+import time
 
 def left_eyebrow(frame, landmarks, frame_w, frame_h):
     #left eyebrow movement action
@@ -15,7 +16,7 @@ def left_eyebrow(frame, landmarks, frame_w, frame_h):
     if (abs(left_eye_brow[0].y - left_eye_brow[1].y)) < 0.020:
         return True
     return False
-
+        
 def right_eyebrow(frame, landmarks, frame_w, frame_h):
     #right eyebrow movement action
     right_eye_brow = [landmarks[296], landmarks[299]]
@@ -28,7 +29,7 @@ def right_eyebrow(frame, landmarks, frame_w, frame_h):
         return True
     return False
 
-def mouth_open(frame, landmarks, frame_w, frame_h):
+def mouth_open(frame, landmarks, frame_w, frame_h, isOpen:bool):
     #mouth open action
     mouth = [landmarks[13], landmarks[14]]
     for landmark in mouth:
@@ -36,9 +37,13 @@ def mouth_open(frame, landmarks, frame_w, frame_h):
         y = int(landmark.y * frame_h)
         cv2.circle(frame, (x, y), 3, (0, 255, 255))
 
-    if (abs(mouth[0].y - mouth[1].y)) > 0.05:
-        return True
-    return False
+    if isOpen:
+        return 0
+    else:
+        if (abs(mouth[0].y - mouth[1].y)) >0.1: #0.012:
+            isOpen = True
+            return 1
+        return 2
 
 def right_wink(frame, landmarks, frame_w, frame_h):
     #detect right wink
@@ -51,6 +56,7 @@ def right_wink(frame, landmarks, frame_w, frame_h):
     if (right[0].y - right[1].y) < 0.020:
         return True
     return False
+
 
 def left_wink(frame, landmarks, frame_w, frame_h):
     # Detect left wink (blinking)
