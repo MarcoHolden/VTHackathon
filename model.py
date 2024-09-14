@@ -2,6 +2,7 @@
 This file will contains all the method needed by the eyecursorinterface.py
 '''
 import cv2
+import pyautogui
 
 def left_eyebrow(frame, landmarks, frame_w, frame_h):
     #left eyebrow movement action
@@ -11,9 +12,9 @@ def left_eyebrow(frame, landmarks, frame_w, frame_h):
         y = int(landmark.y * frame_h)
         cv2.circle(frame, (x, y), 3, (0, 255, 255))
 
-    if (abs(left_eye_brow[0].y - left_eye_brow[1].y)) < 0.040:
-        print("left eyebrow detected")
-        #pyautogui.click()
+    if (abs(left_eye_brow[0].y - left_eye_brow[1].y)) < 0.020:
+        return True
+    return False
 
 def right_eyebrow(frame, landmarks, frame_w, frame_h):
     #right eyebrow movement action
@@ -23,9 +24,9 @@ def right_eyebrow(frame, landmarks, frame_w, frame_h):
         y = int(landmark.y * frame_h)
         cv2.circle(frame, (x, y), 3, (0, 255, 255))
 
-    if (abs(right_eye_brow[0].y - right_eye_brow[1].y)) < 0.040:
-        print("right eyebrow detected")
-        #pyautogui.click()
+    if (abs(right_eye_brow[0].y - right_eye_brow[1].y)) < 0.020:
+        return True
+    return False
 
 def mouth_open(frame, landmarks, frame_w, frame_h):
     #mouth open action
@@ -35,10 +36,9 @@ def mouth_open(frame, landmarks, frame_w, frame_h):
         y = int(landmark.y * frame_h)
         cv2.circle(frame, (x, y), 3, (0, 255, 255))
 
-    if (abs(mouth[0].y - mouth[1].y)) > 0.012:
-        print("mouth open")
-        #pyautogui.press('ctrl')
-        #pyautogui.press('ctrl')
+    if (abs(mouth[0].y - mouth[1].y)) > 0.05:
+        return True
+    return False
 
 def right_wink(frame, landmarks, frame_w, frame_h):
     #detect right wink
@@ -48,9 +48,9 @@ def right_wink(frame, landmarks, frame_w, frame_h):
         y = int(landmark.y * frame_h)
         cv2.circle(frame, (x, y), 3, (0, 255, 255))
 
-    if (right[0].y - right[1].y) < 0.012:
-        print("right wink")
-        #pyautogui.click()
+    if (right[0].y - right[1].y) < 0.020:
+        return True
+    return False
 
 def left_wink(frame, landmarks, frame_w, frame_h):
     # Detect left wink (blinking)
@@ -61,6 +61,6 @@ def left_wink(frame, landmarks, frame_w, frame_h):
         cv2.circle(frame, (x, y), 3, (0, 255, 255))
 
     current_time = cv2.getTickCount() / cv2.getTickFrequency()
-    if ((left[0].y - left[1].y) < 0.012):
-        print("left wink")
-        pyautogui.click()
+    if ((left[0].y - left[1].y) < 0.020):
+        return True
+    return False
