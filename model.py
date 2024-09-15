@@ -5,6 +5,24 @@ import cv2
 import pyautogui
 import time
 
+#apply happy face for down scroll
+def smile(frame, landmarks, frame_w, frame_h):
+    leftWisker = [landmarks[61]]
+    rightWisker = [landmarks[291]]#[269, 270, 409, 291, 375, 321, 405]
+    for landmark in leftWisker:
+        x = int(landmark.x * frame_w)
+        y = int(landmark.y * frame_h)
+        cv2.circle(frame, (x, y), 3, (0, 255, 255))
+
+    for landmark in rightWisker:
+        x = int(landmark.x * frame_w)
+        y = int(landmark.y * frame_h)
+        cv2.circle(frame, (x, y), 3, (0, 255, 255))
+    #Mark likes 0.12    
+    if (abs(leftWisker[0].x - rightWisker[0].x) > 0.12) :
+        print("You smiled")
+        pyautogui.scroll(-10)
+
 def eyebrows(frame, landmarks, frame_w, frame_h):
     left_eye_brow = [landmarks[66], landmarks[69]]
     right_eye_brow = [landmarks[296], landmarks[299]]
@@ -22,29 +40,29 @@ def eyebrows(frame, landmarks, frame_w, frame_h):
         print("both eyebrow detected")
         pyautogui.scroll(10)
 
-def left_eyebrow(frame, landmarks, frame_w, frame_h):
-    #left eyebrow movement action
-    left_eye_brow = [landmarks[66], landmarks[69]]
-    for landmark in left_eye_brow:
-        x = int(landmark.x * frame_w)
-        y = int(landmark.y * frame_h)
-        cv2.circle(frame, (x, y), 3, (0, 255, 255))
+# def left_eyebrow(frame, landmarks, frame_w, frame_h):
+#     #left eyebrow movement action
+#     left_eye_brow = [landmarks[66], landmarks[69]]
+#     for landmark in left_eye_brow:
+#         x = int(landmark.x * frame_w)
+#         y = int(landmark.y * frame_h)
+#         cv2.circle(frame, (x, y), 3, (0, 255, 255))
 
-    if (abs(left_eye_brow[0].y - left_eye_brow[1].y)) < 0.040:
-        print("left eyebrow detected")
-        #pyautogui.click()
+#     if (abs(left_eye_brow[0].y - left_eye_brow[1].y)) < 0.040:
+#         print("left eyebrow detected")
+#         #pyautogui.click()
 
-def right_eyebrow(frame, landmarks, frame_w, frame_h):
-    #right eyebrow movement action
-    right_eye_brow = [landmarks[296], landmarks[299]]
-    for landmark in right_eye_brow:
-        x = int(landmark.x * frame_w)
-        y = int(landmark.y * frame_h)
-        cv2.circle(frame, (x, y), 3, (0, 255, 255))
+# def right_eyebrow(frame, landmarks, frame_w, frame_h):
+#     #right eyebrow movement action
+#     right_eye_brow = [landmarks[296], landmarks[299]]
+#     for landmark in right_eye_brow:
+#         x = int(landmark.x * frame_w)
+#         y = int(landmark.y * frame_h)
+#         cv2.circle(frame, (x, y), 3, (0, 255, 255))
 
-    if (abs(right_eye_brow[0].y - right_eye_brow[1].y)) < 0.040:
-        print("right eyebrow detected")
-        #pyautogui.click()
+#     if (abs(right_eye_brow[0].y - right_eye_brow[1].y)) < 0.040:
+#         print("right eyebrow detected")
+#         #pyautogui.click()
 
 def mouth_open(frame, landmarks, frame_w, frame_h, isOpen:bool):
     #mouth open action

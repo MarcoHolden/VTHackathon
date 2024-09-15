@@ -10,46 +10,90 @@ import model
 import time
 
 
-class CircleMenuApp:
+class CircleMenuApp():
     def __init__(self):
         self.root = tk.Tk()
         self.menu = CircleMenu(self.root)
         self.root.mainloop()
-
 class CircleMenu:
     def __init__(self, root):
         self.root = root
         self.root.title("Clickable Circles")
-        self.canvas = tk.Canvas(root, width=800, height=600, bg='black')
+        self.screen_width = pyautogui.size()[0]
+        self.screen_height = pyautogui.size()[1]
+        self.canvas = tk.Canvas(root, width=self.screen_width, height=self.screen_height, bg='black')
         self.canvas.pack(fill=tk.BOTH, expand=True)
 
         self.circles = []
-        self.start_time = time.time()  # Time when the first circle is created
-        self.create_circle()  # Create the first circle
+        self.reaction_times = []
+        self.start_time = time.time()
+        self.pattern = [
+            (self.screen_width / 2, self.screen_height / 2+20),  # Center
+            (self.screen_width / 8, self.screen_height / 8),  # Top left
+            (7 * self.screen_width / 8, self.screen_height / 8),  # Top right
+            (self.screen_width / 8, 7 * self.screen_height / 8 - 16),  # Bottom left
+            (7 * self.screen_width / 8, 7 * self.screen_height / 8 - 16)   # Bottom right
+        ]
+        self.pattern_index = 0
+        self.cycle_count = 0
+        self.max_cycles = 2  # Repeat the pattern twice
+        self.show_instructions()
+
+    def show_instructions(self):
+        self.canvas.delete("all")
+        self.canvas.create_text(self.screen_width / 2, self.screen_height / 2,
+                                text="Move the cursor with your head and wink with your left eye to click the circles.",
+                                fill="white", font=("Arial", 16),
+                                anchor='center')
+        self.root.after(5000, self.create_circle)  # Show instructions for 5 seconds, then start the pattern
 
     def create_circle(self):
-        # Remove any existing circles
-        self.canvas.delete("circle")
-        self.circles.clear()
-        
-        # Generate new circle position and radius
-        x = random.randint(100, 700)
-        y = random.randint(100, 500)
-        radius = 20
-        circle = self.canvas.create_oval(x-radius, y-radius, x+radius, y+radius, fill='orange', outline='orange', tags="circle")
-        self.circles.append((circle, (x, y, radius)))
-        self.canvas.tag_bind(circle, '<Button-1>', self.on_circle_click)
-        self.start_time = time.time()  # Update start time
+        if self.cycle_count < self.max_cycles:
+            # Get the current position from the pattern
+            x, y = self.pattern[self.pattern_index]
+            radius = 20
+            circle = self.canvas.create_oval(x-radius, y-radius, x+radius, y+radius, fill='orange', outline='orange', tags="circle")
+            self.circles.append((circle, (x, y, radius)))
+            self.canvas.tag_bind(circle, '<Button-1>', self.on_circle_click)
+
+            self.start_time = time.time()
+
+            # Move to the next pattern position
+            self.pattern_index = (self.pattern_index + 1) % len(self.pattern)
+            
+            # Increase cycle count if the pattern is completed
+            if self.pattern_index == 0:
+                self.cycle_count += 1
+
+        else:
+            self.canvas.delete("all")
+            self.canvas.config(bg='black')  # Change canvas background to black after completing the pattern
+            self.canvas.create_text(self.screen_width / 2, self.screen_height / 2,
+                                    text="Pattern completed. Thank you!",
+                                    fill="white", font=("Arial", 16),
+                                    anchor='center')
 
     def on_circle_click(self, event):
-        item = self.canvas.find_closest(event.x, event.y)
-        click_time = time.time() - self.start_time  # Time since the circle appeared
-        print(f"Circle clicked! Time taken: {click_time:.2f} seconds")
-        self.create_circle()  # Create a new circle
+        clicked_circle = self.canvas.find_closest(event.x, event.y)[0]
+        for circle_id, (x, y, radius) in self.circles:
+            if circle_id == clicked_circle:
+                self.canvas.delete(circle_id)
+                self.circles.remove((circle_id, (x, y, radius)))
+                click_time = time.time() - self.start_time
+                self.reaction_times.append(click_time)
+                print(f"Circle clicked! Time taken: {click_time:.2f} seconds")
+                # Create the next circle after a click
+                self.root.after(500, self.create_circle)  # Short delay before creating the next circle
+                break
 
-    def get_circle_data(self):
-        print(self.circles)
-        return self.circles
+    def calculate_average_reaction_time(self):
+        if len(self.reaction_times) >= 3:
+            # Use the last 3 reaction times for a more responsive average
+            return np.mean(self.reaction_times[-3:])
+        elif self.reaction_times:
+            return np.mean(self.reaction_times)
+        return float('inf')
+
 
 
 class EyeTrackingThread(Thread):
@@ -77,11 +121,18 @@ class EyeTrackingThread(Thread):
             rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
             output = self.face_mesh.process(rgb_frame)
             landmark_points = output.multi_face_landmarks
+            
+            
+            left_eye_landmarks = [33, 133, 144, 145, 153, 154, 155, 159, 160, 161, 163, 173]
+            right_eye_landmarks = [362, 382, 383, 384, 385, 386, 387, 388, 390, 398]
+            left_iris_landmarks = [468, 469, 470, 471]
+            right_iris_landmarks = [473, 474, 475, 476]
+            MOUTH_LANDMARKS = [61, 185, 40, 39, 37, 0, 267, 269, 270, 409, 291, 375, 321, 405, 314, 17, 84, 181, 91, 146, 61]
+    
 
             frame_h, frame_w, _ = frame.shape
             if landmark_points:
                 landmarks = landmark_points[0].landmark
-                right_iris_landmarks = [473, 474, 475, 476]
                 avg_x = sum(landmarks[idx].x for idx in right_iris_landmarks) / len(right_iris_landmarks)
                 avg_y = sum(landmarks[idx].y for idx in right_iris_landmarks) / len(right_iris_landmarks)
                 
@@ -91,8 +142,13 @@ class EyeTrackingThread(Thread):
                 #model.left_eyebrow(frame,landmarks, frame_w, frame_h)
                 #right eyebrow movement
                 #model.right_eyebrow(frame, landmarks, frame_w, frame_h)
+
+                #eveybrow raise
+                model.eyebrows(frame,landmarks, frame_w, frame_h)
                 #mouth open is action
                 model.mouth_open(frame, landmarks, frame_w, frame_h, self.isOpen)
+                #detect Smile
+                model.smile(frame, landmarks,frame_w,frame_h)
                 #right wink
                 model.right_wink(frame, landmarks, frame_w,frame_h)
                 # Detect left wink (blinking)
@@ -125,29 +181,67 @@ class EyeTrackingThread(Thread):
 
         pyautogui.moveTo(screen_x, screen_y)
 
+
+
 def main():
     queue = Queue()
     
-    # Start the EyeTrackingThread
     eye_tracking_thread = EyeTrackingThread(queue)
     eye_tracking_thread.start()
 
-    # Run the Tkinter GUI in the main thread
-    tk_app = CircleMenuApp()
+    root = tk.Tk()
+    circle_menu = CircleMenu(root)
 
-    while True:
-        try:
-            circle = tk_app.menu.get_circle_data()
-            if is_circle_clicked(circle):
-                print(f"Cursor clicked a Circle!")
-        except Empty:
-            print("here")
-            pass
+    best_alpha = 0.5
+    min_reaction_time = float('inf')
+    alpha_step = 0.05  # Reduced step size for finer adjustments
+    min_reaction_time_threshold = 2.0
+    update_interval = 500  # Update every 500ms
 
-def is_circle_clicked(circle):
-    if circle.clicked:
-            return True
-    return False
+
+    def update_alpha():
+        nonlocal best_alpha, min_reaction_time
+
+        average_reaction_time = circle_menu.calculate_average_reaction_time()
+        print(f"Average reaction time: {average_reaction_time:.2f} seconds")
+
+        if average_reaction_time < min_reaction_time:
+            min_reaction_time = average_reaction_time
+            best_alpha = eye_tracking_thread.alpha
+            print(f"New best reaction time: {min_reaction_time:.2f} seconds with alpha: {best_alpha}")
+
+        if average_reaction_time < min_reaction_time_threshold:
+            eye_tracking_thread.alpha = best_alpha
+            print(f"Optimized alpha value: {eye_tracking_thread.alpha}")
+        else:
+            # Adjust alpha based on the difference from the best reaction time
+            adjustment = (min_reaction_time - average_reaction_time) * alpha_step
+            new_alpha = min(1.0, max(0.1, eye_tracking_thread.alpha + adjustment))
+            if new_alpha != eye_tracking_thread.alpha:
+                eye_tracking_thread.alpha = new_alpha
+                print(f"Adjusted alpha: {eye_tracking_thread.alpha}")
+
+        # Process any pending cursor positions
+        while not queue.empty():
+            try:
+                cursor_x, cursor_y = queue.get_nowait()
+                print(f"Cursor position: ({cursor_x}, {cursor_y})")
+            except Empty:
+                break
+
+        # Schedule the next update
+        root.after(update_interval, update_alpha)
+
+    # Start the update loop
+    root.after(update_interval, update_alpha)
+
+    try:
+        root.mainloop()
+    except KeyboardInterrupt:
+        print("Program interrupted by user.")
+    finally:
+        # Cleanup
+        eye_tracking_thread.join()
 
 if __name__ == "__main__":
     main()
